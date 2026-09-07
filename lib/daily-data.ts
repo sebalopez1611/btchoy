@@ -13,23 +13,18 @@ export const mockDailyData: DailyData = {
   news: [{ title: 'Bitcoin recupera terreno tras la caída inicial del mercado', source: 'Cointelegraph', ago: '3h', url: '#' }, { title: 'Los flujos institucionales vuelven al centro de atención', source: 'CoinDesk', ago: '4h', url: '#' }],
 }
 
-export async function getDailyData(): Promise<DailyData> {
-  if (!process.env.DATABASE_URL) return mockDailyData
+export async function getDailyData(): Promise<DailyData | null> {
+  if (!process.env.DATABASE_URL) return null
 
   try {
     const { desc } = await import('drizzle-orm')
     const { db } = await import('@/lib/db')
     const { dailySnapshots } = await import('@/lib/db/schema')
     const [snapshot] = await db.select().from(dailySnapshots).orderBy(desc(dailySnapshots.snapshotDate)).limit(1)
-
-    if (snapshot?.payload && typeof snapshot.payload === 'object') {
-      return { ...mockDailyData, ...(snapshot.payload as Partial<DailyData>) }
-    }
+    return snapshot?.payload && typeof snapshot.payload === 'object' ? snapshot.payload as DailyData : null
   } catch {
-    return mockDailyData
+    return null
   }
-
-  return mockDailyData
 }
 
 export const formatMoney = (value: number | null, compact = false) => value == null ? 'Sin datos' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: compact ? 'compact' : 'standard', maximumFractionDigits: compact ? 2 : 0 }).format(value)
