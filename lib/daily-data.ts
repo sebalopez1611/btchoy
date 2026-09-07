@@ -1,14 +1,5 @@
-export type DailyData = {
-  asOf: string
-  market: { price: number | null; change24h: number | null; marketCap: number | null; volume24h: number | null; dominance: number | null; fearGreed: number | null; fearGreedLabel: string | null }
-  catalyst: { title: string; source: string; ago: string | null; url: string | null } | null
-  bias: { key: 'bullish' | 'moderately_bullish' | 'neutral' | 'moderately_bearish' | 'bearish'; label: string; news: string | null; institutional: string | null; traders: string | null } | null
-  changes: Array<{ id: string; label: string; before: string; after: string; direction: 'positive' | 'negative' | 'neutral' }>
-  watch: Array<{ category: string; title: string; detail: string; importance: 'high' | 'medium' | 'low' }>
-  etf: { lastDay: number | null; days7: number | null; days30: number | null; change30d: number | null } | null
-  derivatives: { funding: number | null; openInterest: number | null; longPct: number | null; shortPct: number | null; liquidations24h: number | null } | null
-  news: Array<{ title: string; source: string; ago: string | null; url: string | null }>
-}
+import type { DailyData } from '@/lib/daily-types'
+export type { DailyData } from '@/lib/daily-types'
 
 export const mockDailyData: DailyData = {
   asOf: '2026-09-07T15:00:00Z',
@@ -22,7 +13,24 @@ export const mockDailyData: DailyData = {
   news: [{ title: 'Bitcoin recupera terreno tras la caída inicial del mercado', source: 'Cointelegraph', ago: '3h', url: '#' }, { title: 'Los flujos institucionales vuelven al centro de atención', source: 'CoinDesk', ago: '4h', url: '#' }],
 }
 
-export async function getDailyData(): Promise<DailyData> { return mockDailyData }
+export async function getDailyData(): Promise<DailyData> {
+  if (!process.env.DATABASE_URL) return mockDailyData
+
+  try {
+    const { desc } = await import('drizzle-orm')
+    const { db } = await import('@/lib/db')
+    const { dailySnapshots } = await import('@/lib/db/schema')
+    const [snapshot] = await db.select().from(dailySnapshots).orderBy(desc(dailySnapshots.snapshotDate)).limit(1)
+
+    if (snapshot?.payload && typeof snapshot.payload === 'object') {
+      return { ...mockDailyData, ...(snapshot.payload as Partial<DailyData>) }
+    }
+  } catch {
+    return mockDailyData
+  }
+
+  return mockDailyData
+}
 
 export const formatMoney = (value: number | null, compact = false) => value == null ? 'Sin datos' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: compact ? 'compact' : 'standard', maximumFractionDigits: compact ? 2 : 0 }).format(value)
 export const formatPercent = (value: number | null, digits = 2) => value == null ? 'Sin datos' : `${value > 0 ? '+' : ''}${value.toFixed(digits)}%`

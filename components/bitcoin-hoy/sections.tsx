@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { ArrowUpRight, BarChart3, ChevronRight, Eye, ExternalLink, Landmark, Newspaper, Settings2, Sparkles, X } from 'lucide-react'
-import type { DailyData } from '@/lib/daily-data'
-import { AFFILIATE_CONFIG, formatMoney, formatPercent } from '@/lib/daily-data'
+import type { DailyData } from '@/lib/daily-types'
+import { AFFILIATE_CONFIG, formatMoney, formatPercent } from '@/lib/daily-types'
 
 const cn = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ')
 const tone = (direction: string) => direction === 'positive' ? 'text-positive' : direction === 'negative' ? 'text-negative' : 'text-warning'
