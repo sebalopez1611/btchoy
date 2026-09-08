@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ArrowUpRight, BarChart3, ChevronRight, Eye, ExternalLink, Landmark, Newspaper, Settings2, Sparkles, X } from 'lucide-react'
 import type { DailyData } from '@/lib/daily-types'
 import { AFFILIATE_CONFIG, formatMoney, formatPercent } from '@/lib/daily-types'
+import { TradingViewChart } from './trading-view-chart'
 
 const cn = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ')
 const tone = (direction: string) => direction === 'positive' ? 'text-positive' : direction === 'negative' ? 'text-negative' : 'text-warning'
@@ -33,7 +34,7 @@ export function CatalystCard({ catalyst }: { catalyst: DailyData['catalyst'] }) 
 }
 
 export function BitcoinChart() {
-  return <div className="chart-panel"><div className="card-heading"><div><span className="section-label">Mercado</span><h2>BTC <span>· 4H</span></h2></div><span className="chart-live"><i /> Mock chart</span></div><div className="chart-area" aria-label="Gráfico simulado de Bitcoin a cuatro horas"><div className="chart-grid" /><svg viewBox="0 0 800 250" preserveAspectRatio="none" role="img" aria-label="Tendencia ascendente y retroceso reciente"><path className="chart-fill" d="M0 195 C40 184 55 168 92 176 S132 122 174 145 S225 118 258 134 S302 82 338 108 S374 150 411 123 S458 85 492 99 S526 52 567 76 S614 36 649 68 S701 80 730 49 S770 66 800 30 V250 H0 Z" /><path className="chart-line" d="M0 195 C40 184 55 168 92 176 S132 122 174 145 S225 118 258 134 S302 82 338 108 S374 150 411 123 S458 85 492 99 S526 52 567 76 S614 36 649 68 S701 80 730 49 S770 66 800 30" /></svg><div className="chart-tooltip"><span>BTC/USD</span><b>$78,764</b><small>07 Sep · 15:00</small></div></div><div className="chart-axis"><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span></div><div className="chart-legend"><span><i className="legend-orange" /> Precio</span><span>SMA 50 <b>—</b></span><span>RSI <b>—</b></span></div></div>
+  return <div className="chart-panel"><div className="card-heading"><div><span className="section-label">Mercado</span><h2>BTC <span>· 4H</span></h2></div><span className="chart-live"><i /> Mercado en vivo</span></div><TradingViewChart /><div className="chart-legend"><span><i className="legend-orange" /> BTC / USDT</span><span>4 horas</span><span>Spot</span></div></div>
 }
 
 export function MarketBias({ bias }: { bias: DailyData['bias'] }) {
