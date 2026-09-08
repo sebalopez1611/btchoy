@@ -30,7 +30,8 @@ async function rss(url: string, source: string) {
   const items = [...xml.matchAll(/<item[\s\S]*?<\/item>/gi)].map((match) => {
     const item = match[0]
     const get = (tag: string) => text(item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'))?.[1]?.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, ''))
-    return { title: get('title') ?? 'Noticia sin título', description: get('description'), source, ago: get('pubDate'), url: get('link') }
+    const mediaContent = item.match(/<media:content[^>]+url=["']([^"']+)["'][^>]*>/i)?.[1] ?? item.match(/<media:thumbnail[^>]+url=["']([^"']+)["'][^>]*>/i)?.[1] ?? item.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]*>/i)?.[1] ?? null
+    return { title: get('title') ?? 'Noticia sin título', description: get('description'), source, ago: get('pubDate'), url: get('link'), imageUrl: mediaContent }
   })
   return { items, httpStatus: response.status }
 }
