@@ -13,7 +13,9 @@ export async function GET(request: Request) {
   try {
     const today = new Date().toISOString().slice(0, 10)
     const [previous] = process.env.DATABASE_URL ? await db.select().from(dailySnapshots).where(lt(dailySnapshots.snapshotDate, today)).orderBy(desc(dailySnapshots.snapshotDate)).limit(1) : []
-    const result = await collectLiveDaily((previous?.payload as DailyData | undefined) ?? null)
+    const goodRows = process.env.DATABASE_URL ? await db.select().from(dailySnapshots).orderBy(desc(dailySnapshots.snapshotDate)).limit(30) : []
+    const lastKnownGood = goodRows.find((row) => { const payload = row.payload as Partial<DailyData>; return payload.market?.price != null && payload.market?.marketCap != null && payload.market?.volume24h != null && payload.market?.dominance != null })
+    const result = await collectLiveDaily((previous?.payload as DailyData | undefined) ?? null, (lastKnownGood?.payload as DailyData | undefined) ?? null)
     if (process.env.DATABASE_URL) {
       const snapshotDate = new Date().toISOString().slice(0, 10)
       await db.insert(dailySnapshots).values({ snapshotDate, payload: result.data }).onConflictDoUpdate({ target: dailySnapshots.snapshotDate, set: { payload: result.data, updatedAt: new Date() } })
