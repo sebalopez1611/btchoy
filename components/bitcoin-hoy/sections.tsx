@@ -5,6 +5,7 @@ import { ArrowUpRight, BarChart3, ChevronRight, Eye, ExternalLink, Landmark, New
 import type { DailyData } from '@/lib/daily-types'
 import { AFFILIATE_CONFIG, formatMoney, formatPercent } from '@/lib/daily-types'
 import { TradingViewChart } from './trading-view-chart'
+import { MiniSparkline } from './mini-sparkline'
 
 const cn = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ')
 const tone = (direction: string) => direction === 'positive' ? 'text-positive' : direction === 'negative' ? 'text-negative' : 'text-warning'
@@ -22,7 +23,7 @@ export function DailyHero({ data }: { data: DailyData }) {
     <div className="eyebrow"><span className="brand-mark">₿</span><span>Bitcoin Hoy</span><span className="eyebrow-rule" /></div>
     <div className="hero-copy"><p className="kicker">Tu lectura diaria de Bitcoin</p><h1>La edición de<br /><em>hoy.</em></h1><p className="date-line">Lunes, 7 de septiembre <span>·</span> Actualizado hace 12 min</p></div>
     <div className="hero-market"><span className="price-label">BTC / USD</span><strong className="hero-price">{formatMoney(market.price)}</strong><div className="hero-change"><span className={cn('change-pill', market.change24h == null ? 'neutral-bg' : changeIsPositive ? 'positive-bg' : 'negative-bg')}>{formatPercent(market.change24h)}</span><span>en las últimas 24h</span></div></div>
-    <div className="hero-stats">{[['Market Cap', formatMoney(market.marketCap, true)], ['Volumen 24h', formatMoney(market.volume24h, true)], ['Dominancia', market.dominance == null ? 'Sin datos' : `${market.dominance.toFixed(2)}%`], ['Fear & Greed', market.fearGreed == null ? 'Sin datos' : `${market.fearGreed} · ${market.fearGreedLabel || 'Sin etiqueta'}`]].map(([label, value]) => <div key={label}><span>{label}</span><b>{value}</b></div>)}</div>
+    <div className="hero-stats">{[['Market Cap', formatMoney(market.marketCap, true), market.history?.marketCap], ['Volumen 24h', formatMoney(market.volume24h, true), market.history?.volume24h], ['Dominancia', market.dominance == null ? 'Sin datos' : `${market.dominance.toFixed(2)}%`, market.history?.dominance], ['Fear & Greed', market.fearGreed == null ? 'Sin datos' : `${market.fearGreed} · ${market.fearGreedLabel || 'Sin etiqueta'}`, market.history?.fearGreed]].map(([label, value, history]) => <div key={label as string}><span>{label as string}</span><div className="stat-value-row"><b>{value as string}</b><MiniSparkline values={history as number[] | undefined} /></div></div>)}</div>
     <a href="#edicion" className="scroll-cue"><span>↓</span> La edición de hoy</a>
   </section>
 }
@@ -30,7 +31,7 @@ export function DailyHero({ data }: { data: DailyData }) {
 export function CatalystCard({ catalyst }: { catalyst: DailyData['catalyst'] }) {
   if (!catalyst) return <section className="section-block empty-block"><p className="section-label">Catalizador principal</p><EmptyState label="No hay catalizador disponible para esta edición." /></section>
   const href = safeHref(catalyst.url)
-  return <section className="catalyst-card reveal"><div className="section-label accent-label"><Sparkles size={14} /> Catalizador principal</div>{href ? <a href={href} className="catalyst-title">{catalyst.title || 'Catalizador sin título'}<ArrowUpRight className="inline-icon" /></a> : <p className="catalyst-title">{catalyst.title || 'Catalizador sin título'}</p>}<div className="meta-line"><span>{catalyst.source || 'Fuente no disponible'}</span><span>·</span><span>{catalyst.ago || 'Sin hora'}</span>{href && <ExternalLink size={13} />}</div></section>
+  return <section className={cn('catalyst-card reveal', catalyst.imageUrl && 'catalyst-split')}><div className="catalyst-copy"><div className="section-label accent-label"><Sparkles size={14} /> Catalizador principal</div>{href ? <a href={href} className="catalyst-title">{catalyst.title || 'Catalizador sin título'}<ArrowUpRight className="inline-icon" /></a> : <p className="catalyst-title">{catalyst.title || 'Catalizador sin título'}</p>}<div className="meta-line"><span>{catalyst.source || 'Fuente no disponible'}</span><span>·</span><span>{catalyst.ago || 'Sin hora'}</span>{href && <ExternalLink size={13} />}</div></div>{catalyst.imageUrl && <img className="catalyst-image" src={catalyst.imageUrl} alt="Imagen asociada al catalizador principal" />}</section>
 }
 
 export function BitcoinChart() {

@@ -1,7 +1,7 @@
 export type DailyData = {
   asOf: string
-  market: { price: number | null; change24h: number | null; marketCap: number | null; volume24h: number | null; dominance: number | null; fearGreed: number | null; fearGreedLabel: string | null }
-  catalyst: { title: string; titleOriginal?: string; source: string; ago: string | null; url: string | null } | null
+  market: { price: number | null; change24h: number | null; marketCap: number | null; volume24h: number | null; dominance: number | null; fearGreed: number | null; fearGreedLabel: string | null; history?: { marketCap: number[]; volume24h: number[]; dominance: number[]; fearGreed: number[] } }
+  catalyst: { title: string; titleOriginal?: string; source: string; ago: string | null; url: string | null; imageUrl?: string | null } | null
   bias: { key: 'bullish' | 'moderately_bullish' | 'neutral' | 'moderately_bearish' | 'bearish'; label: string; news: string | null; institutional: string | null; traders: string | null } | null
   changes: Array<{ id: string; label: string; before: string; after: string; direction: 'positive' | 'negative' | 'neutral' }>
   watch: Array<{ category: string; title: string; detail: string; importance: 'high' | 'medium' | 'low' }>
