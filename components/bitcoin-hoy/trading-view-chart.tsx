@@ -1,5 +1,3 @@
-'use client'
-
 export function TradingViewChart() {
   return <div className="tradingview-chart-wrap">
     <div className="chart-fallback" role="status">
