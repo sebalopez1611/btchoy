@@ -12,7 +12,8 @@ export async function GET(request: Request) {
   const debugRequested = new URL(request.url).searchParams.get('debug') === '1'
   try {
     const today = new Date().toISOString().slice(0, 10)
-    const [previous] = process.env.DATABASE_URL ? await db.select().from(dailySnapshots).where(lt(dailySnapshots.snapshotDate, today)).orderBy(desc(dailySnapshots.snapshotDate)).limit(1) : []
+    const historicalRows = process.env.DATABASE_URL ? await db.select().from(dailySnapshots).where(lt(dailySnapshots.snapshotDate, today)).orderBy(desc(dailySnapshots.snapshotDate)).limit(90) : []
+    const previous = historicalRows.find((row) => (row.payload as Partial<DailyData>).market?.price != null)
     const goodRows = process.env.DATABASE_URL ? await db.select().from(dailySnapshots).orderBy(desc(dailySnapshots.snapshotDate)).limit(30) : []
     const lastKnownGood = goodRows.find((row) => { const payload = row.payload as Partial<DailyData>; return payload.market?.price != null && payload.market?.marketCap != null && payload.market?.volume24h != null && payload.market?.dominance != null })
     const result = await collectLiveDaily((previous?.payload as DailyData | undefined) ?? null, (lastKnownGood?.payload as DailyData | undefined) ?? null)
