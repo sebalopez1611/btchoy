@@ -14,5 +14,5 @@ export function MiniSparkline({ values }: { values?: number[] }) {
   const delta = points.at(-1)! - points[0]
   const relativeDelta = Math.abs(points[0]) > 0 ? Math.abs(delta / points[0]) : Math.abs(delta)
   const tone = relativeDelta < 0.002 ? 'var(--warning)' : delta > 0 ? 'var(--positive)' : 'var(--negative)'
-  return <svg className="mini-sparkline" viewBox="0 0 88 32" role="img" aria-label="Tendencia reciente" style={{ '--sparkline-color': tone } as CSSProperties}><path d={path} fill="none" opacity="0.78" stroke="var(--sparkline-color)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  return <svg className="mini-sparkline" viewBox="0 0 88 32" role="img" aria-label="Tendencia reciente" style={{ '--sparkline-color': tone } as CSSProperties}><line x1="0" y1="16" x2="88" y2="16" stroke="var(--border)" strokeWidth="1" opacity=".35" /><path d={path} fill="none" opacity=".9" stroke="var(--sparkline-color)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
