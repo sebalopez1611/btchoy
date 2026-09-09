@@ -30,8 +30,11 @@ async function rss(url: string, source: string) {
   const items = [...xml.matchAll(/<item[\s\S]*?<\/item>/gi)].map((match) => {
     const item = match[0]
     const get = (tag: string) => text(item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'))?.[1]?.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, ''))
-    const mediaContent = item.match(/<media:content[^>]+url=["']([^"']+)["'][^>]*>/i)?.[1] ?? item.match(/<media:thumbnail[^>]+url=["']([^"']+)["'][^>]*>/i)?.[1] ?? item.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]*>/i)?.[1] ?? null
-    return { title: get('title') ?? 'Noticia sin título', description: get('description'), source, ago: get('pubDate'), url: get('link'), imageUrl: mediaContent }
+    const mediaTag = item.match(/<(?:media:content|media:thumbnail|enclosure)\b[^>]*>/i)?.[0] ?? ''
+    const mediaUrl = mediaTag.match(/\burl=["']([^"']+)["']/i)?.[1] ?? null
+    const mediaType = mediaTag.match(/\btype=["']([^"']+)["']/i)?.[1]?.toLowerCase() ?? ''
+    const imageUrl = mediaUrl && (mediaType.startsWith('image/') || /\.(?:jpe?g|png|webp)(?:[?#].*)?$/i.test(mediaUrl)) ? mediaUrl : null
+    return { title: get('title') ?? 'Noticia sin título', description: get('description'), source, ago: get('pubDate'), url: get('link'), imageUrl }
   })
   return { items, httpStatus: response.status }
 }
@@ -90,10 +93,12 @@ async function translateNewsTitles<T extends { title: string }>(items: T[]) {
 export type LiveDebug = Record<string, unknown>
 
 export async function collectLiveDaily(previous?: DailyData | null, lastKnownGood?: DailyData | null): Promise<{ data: DailyData; sources: Record<string, string>; debug: LiveDebug }> {
-  const [market, global, fear, sentiment, signals, etf, funding, openInterest, liquidations, coindesk, cointelegraph] = await Promise.all([
+  const [market, global, marketHistory, fear, fearHistory, sentiment, signals, etf, funding, openInterest, liquidations, coindesk, cointelegraph] = await Promise.all([
     settled(sourceJson('https://api.coingecko.com/api/v3/coins/bitcoin?localization=false&tickers=false&community_data=false&developer_data=false'), { json: {}, httpStatus: 0 }),
     settled(sourceJson('https://api.coingecko.com/api/v3/global'), { json: {}, httpStatus: 0 }),
+    settled(sourceJson('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1&interval=hourly'), { json: {}, httpStatus: 0 }),
     settled(sourceJson('https://api.alternative.me/fng/?limit=1'), { json: {}, httpStatus: 0 }),
+    settled(sourceJson('https://api.alternative.me/fng/?limit=14'), { json: {}, httpStatus: 0 }),
     settled(sourceJson(`${XOOMAR_BASE}/markets/sentiment?asset=btc&window=24h`), { json: {}, httpStatus: 0 }),
     settled(sourceJson(`${XOOMAR_BASE}/markets/signals/btc`), { json: {}, httpStatus: 0 }),
     settled(sourceJson(`${XOOMAR_BASE}/markets/etf-flows?asset=btc&days=90`), { json: {}, httpStatus: 0 }),
@@ -104,6 +109,11 @@ export async function collectLiveDaily(previous?: DailyData | null, lastKnownGoo
     settled(rss('https://cointelegraph.com/rss', 'Cointelegraph'), { items: [], httpStatus: 0 }),
   ])
   const coin = market.json as any; const globalJson = global.json as any; const fearJson = fear.json as any
+  const chartJson = marketHistory.json as any
+  const downsample = (values: number[], max = 24) => { if (values.length <= max) return values; const step = (values.length - 1) / (max - 1); return Array.from({ length: max }, (_, index) => values[Math.round(index * step)]).filter((value): value is number => value != null) }
+  const marketCapHistory = downsample((chartJson.market_caps ?? []).map((point: unknown[]) => toNumber(point?.[1])).filter((value: number | null): value is number => value != null))
+  const volumeHistory = downsample((chartJson.total_volumes ?? []).map((point: unknown[]) => toNumber(point?.[1])).filter((value: number | null): value is number => value != null))
+  const fearHistoryValues = downsample(((fearHistory.json as any)?.data ?? []).map((row: any) => toNumber(row.value)).filter((value: number | null): value is number => value != null), 14)
   const sentimentRows = rowsOf((sentiment.json as any)?.data?.data ?? sentiment.json); const sentimentRow = sentimentRows.find((row) => (row.slug === 'btc' || row.symbol === 'btc') && row.window === '24h')
   const signalData = (signals.json as any)?.data ?? {}
   const score = toNumber(sentimentRow?.composite ?? sentimentRow?.compositeScore) ?? toNumber(signalData.composite)
@@ -122,7 +132,7 @@ export async function collectLiveDaily(previous?: DailyData | null, lastKnownGoo
 
   const allNews = [...coindesk.items, ...cointelegraph.items].sort((a, b) => new Date(b.ago ?? 0).getTime() - new Date(a.ago ?? 0).getTime()); const btcNews = allNews.filter((item) => /bitcoin|btc|spot bitcoin etf|bitcoin etf/i.test(`${item.title} ${item.description ?? ''}`)); const news = await translateNewsTitles(btcNews.slice(0, 3).map(({ description: _description, ...item }) => ({ ...item, ago: agoShort(item.ago) })));
   const fearValue = toNumber(fearJson?.data?.[0]?.value); const watchInput = { market: { ...(coin.market_data ?? {}), change24h: toNumber(coin.market_data?.price_change_percentage_24h) }, fearGreed: fearValue, sentiment: sentimentRow, etf: etfParsed, funding: fundingParsed, openInterest: oiValues.reduce((sum, value) => sum + value, 0), liquidations: liquidationsParsed, news }; const groqResult = await settled(groqWatch(watchInput), []); const watch = groqResult.length >= 3 ? groqResult : deterministicWatch({ market: watchInput.market, etf: etfParsed, bias: score == null ? null : { label: biasLabel }, fearGreed: fearValue, funding: fundingParsed, liquidations: liquidationsParsed })
-  const current: DailyData = { asOf: new Date().toISOString(), market: { price: toNumber(coin.market_data?.current_price?.usd) ?? lastKnownGood?.market.price ?? null, change24h: toNumber(coin.market_data?.price_change_percentage_24h) ?? lastKnownGood?.market.change24h ?? null, marketCap: toNumber(coin.market_data?.market_cap?.usd) ?? lastKnownGood?.market.marketCap ?? null, volume24h: toNumber(coin.market_data?.total_volume?.usd) ?? lastKnownGood?.market.volume24h ?? null, dominance: toNumber(globalJson?.data?.market_cap_percentage?.btc) ?? lastKnownGood?.market.dominance ?? null, fearGreed: fearValue ?? lastKnownGood?.market.fearGreed ?? null, fearGreedLabel: fearLabel(fearValue ?? lastKnownGood?.market.fearGreed ?? null) }, catalyst: news[0] ?? null, bias: score == null ? null : { key: biasKey as any, label: biasLabel, news: scoreLabel(toNumber(sentimentRow?.newsScore ?? sentimentRow?.newsLayer?.score ?? signalData.news?.score), 'news'), institutional: scoreLabel(toNumber(sentimentRow?.institutionalScore ?? sentimentRow?.institutionalLayer?.score ?? signalData.institutional?.score), 'institutional'), traders: scoreLabel(toNumber(sentimentRow?.crowdScore ?? sentimentRow?.crowdLayer?.score ?? signalData.crowd?.score), 'crowd') }, changes: previous ? [
+  const current: DailyData = { asOf: new Date().toISOString(), market: { price: toNumber(coin.market_data?.current_price?.usd) ?? lastKnownGood?.market.price ?? null, change24h: toNumber(coin.market_data?.price_change_percentage_24h) ?? lastKnownGood?.market.change24h ?? null, marketCap: toNumber(coin.market_data?.market_cap?.usd) ?? lastKnownGood?.market.marketCap ?? null, volume24h: toNumber(coin.market_data?.total_volume?.usd) ?? lastKnownGood?.market.volume24h ?? null, dominance: toNumber(globalJson?.data?.market_cap_percentage?.btc) ?? lastKnownGood?.market.dominance ?? null, fearGreed: fearValue ?? lastKnownGood?.market.fearGreed ?? null, fearGreedLabel: fearLabel(fearValue ?? lastKnownGood?.market.fearGreed ?? null), history: { marketCap: marketCapHistory, volume24h: volumeHistory, dominance: [lastKnownGood?.market.dominance, toNumber(globalJson?.data?.market_cap_percentage?.btc)].filter((value): value is number => value != null), fearGreed: fearHistoryValues } }, catalyst: news[0] ?? null, bias: score == null ? null : { key: biasKey as any, label: biasLabel, news: scoreLabel(toNumber(sentimentRow?.newsScore ?? sentimentRow?.newsLayer?.score ?? signalData.news?.score), 'news'), institutional: scoreLabel(toNumber(sentimentRow?.institutionalScore ?? sentimentRow?.institutionalLayer?.score ?? signalData.institutional?.score), 'institutional'), traders: scoreLabel(toNumber(sentimentRow?.crowdScore ?? sentimentRow?.crowdLayer?.score ?? signalData.crowd?.score), 'crowd') }, changes: previous ? [
       { id: 'price', label: 'Precio BTC', before: currentValue(previous.market.price), after: currentValue(coin.market_data?.current_price?.usd), direction: (toNumber(coin.market_data?.price_change_percentage_24h) ?? 0) > 0 ? 'positive' as const : (toNumber(coin.market_data?.price_change_percentage_24h) ?? 0) < 0 ? 'negative' as const : 'neutral' as const },
       ...(previous.market.fearGreed != null && fearValue != null && previous.market.fearGreed !== fearValue ? [{ id: 'fear-greed', label: 'Fear & Greed', before: String(previous.market.fearGreed), after: String(fearValue), direction: fearValue > previous.market.fearGreed ? 'positive' as const : 'negative' as const }] : []),
     ].slice(0, 3) : [], watch, etf: etfParsed ?? lastKnownGood?.etf ?? null, derivatives: { funding: fundingParsed ?? lastKnownGood?.derivatives?.funding ?? null, openInterest: oiValues.length ? oiValues.reduce((sum, value) => sum + value, 0) : lastKnownGood?.derivatives?.openInterest ?? null, longPct: longPct ?? lastKnownGood?.derivatives?.longPct ?? null, shortPct: longPct == null ? lastKnownGood?.derivatives?.shortPct ?? null : 100 - longPct, liquidations24h: liquidationsParsed ?? lastKnownGood?.derivatives?.liquidations24h ?? null }, news }
