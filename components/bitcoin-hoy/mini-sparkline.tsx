@@ -11,6 +11,8 @@ export function MiniSparkline({ values }: { values?: number[] }) {
     const y = 28 - ((value - min) / range) * 24
     return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
   }).join(' ')
-  const tone = points.at(-1)! > points[0] ? 'var(--positive)' : points.at(-1)! < points[0] ? 'var(--negative)' : 'var(--orange)'
-  return <svg className="mini-sparkline" viewBox="0 0 88 32" role="img" aria-label="Tendencia reciente" style={{ '--sparkline-color': tone } as CSSProperties}><path d={path} fill="none" stroke="var(--sparkline-color)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  const delta = points.at(-1)! - points[0]
+  const relativeDelta = Math.abs(points[0]) > 0 ? Math.abs(delta / points[0]) : Math.abs(delta)
+  const tone = relativeDelta < 0.002 ? 'var(--warning)' : delta > 0 ? 'var(--positive)' : 'var(--negative)'
+  return <svg className="mini-sparkline" viewBox="0 0 88 32" role="img" aria-label="Tendencia reciente" style={{ '--sparkline-color': tone } as CSSProperties}><path d={path} fill="none" opacity="0.78" stroke="var(--sparkline-color)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
