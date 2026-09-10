@@ -1,28 +1,18 @@
-import { desc, lt } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { dailySnapshots } from '@/lib/db/schema'
-import { collectLiveDaily } from '@/lib/live-data'
-import type { DailyData } from '@/lib/daily-types'
+import { dailySnapshots, editorialEditions } from '@/lib/db/schema'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
-  const debugRequested = new URL(request.url).searchParams.get('debug') === '1'
+export async function GET() {
   try {
-    const today = new Date().toISOString().slice(0, 10)
-    const historicalRows = process.env.DATABASE_URL ? await db.select().from(dailySnapshots).where(lt(dailySnapshots.snapshotDate, today)).orderBy(desc(dailySnapshots.snapshotDate)).limit(90) : []
-    const previous = historicalRows.find((row) => (row.payload as Partial<DailyData>).market?.price != null)
-    const goodRows = process.env.DATABASE_URL ? await db.select().from(dailySnapshots).orderBy(desc(dailySnapshots.snapshotDate)).limit(30) : []
-    const lastKnownGood = goodRows.find((row) => { const payload = row.payload as Partial<DailyData>; return payload.market?.price != null && payload.market?.marketCap != null && payload.market?.volume24h != null && payload.market?.dominance != null })
-    const result = await collectLiveDaily((previous?.payload as DailyData | undefined) ?? null, (lastKnownGood?.payload as DailyData | undefined) ?? null)
-    if (process.env.DATABASE_URL) {
-      const snapshotDate = new Date().toISOString().slice(0, 10)
-      await db.insert(dailySnapshots).values({ snapshotDate, payload: result.data }).onConflictDoUpdate({ target: dailySnapshots.snapshotDate, set: { payload: result.data, updatedAt: new Date() } })
-    }
-    return NextResponse.json({ data: result.data, sources: result.sources, persisted: Boolean(process.env.DATABASE_URL), generatedAt: result.data.asOf, ...(debugRequested ? { _debug: result.debug } : {}) })
+    const [edition] = await db.select().from(editorialEditions).where(eq(editorialEditions.status, 'valid')).orderBy(desc(editorialEditions.generatedAt)).limit(1)
+    if (edition) return NextResponse.json({ data: edition.payload, generatedAt: edition.generatedAt, marketAsOf: edition.marketAsOf, source: 'editorial_edition' })
+    const [snapshot] = await db.select().from(dailySnapshots).orderBy(desc(dailySnapshots.snapshotDate)).limit(1)
+    return NextResponse.json({ data: snapshot?.payload ?? null, generatedAt: snapshot?.updatedAt ?? null, source: snapshot ? 'legacy_snapshot' : null })
   } catch {
-    return NextResponse.json({ data: null, sources: {}, persisted: false, error: 'Live data collection failed', ...(debugRequested ? { _debug: { error: 'collector_failed' } } : {}) }, { status: 200 })
+    return NextResponse.json({ data: null, error: 'Published data unavailable' }, { status: 503 })
   }
 }

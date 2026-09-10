@@ -17,9 +17,11 @@ export async function getDailyData(): Promise<DailyData | null> {
   if (!process.env.DATABASE_URL) return null
 
   try {
-    const { desc } = await import('drizzle-orm')
+    const { desc, eq } = await import('drizzle-orm')
     const { db } = await import('@/lib/db')
-    const { dailySnapshots } = await import('@/lib/db/schema')
+    const { dailySnapshots, editorialEditions } = await import('@/lib/db/schema')
+    const [edition] = await db.select().from(editorialEditions).where(eq(editorialEditions.status, 'valid')).orderBy(desc(editorialEditions.generatedAt)).limit(1)
+    if (edition?.payload && typeof edition.payload === 'object') return edition.payload as DailyData
     const [snapshot] = await db.select().from(dailySnapshots).orderBy(desc(dailySnapshots.snapshotDate)).limit(1)
     return snapshot?.payload && typeof snapshot.payload === 'object' ? snapshot.payload as DailyData : null
   } catch {
