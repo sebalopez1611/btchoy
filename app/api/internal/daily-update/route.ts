@@ -1,3 +1,4 @@
+import { revalidateTag } from 'next/cache'
 import { desc, eq, lt, sql } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   const lockedUntil = new Date(now.getTime() + LOCK_MINUTES * 60_000)
   const [lock] = await db.insert(jobExecutions).values({ jobKey: JOB_KEY, status: 'running', lockedUntil, startedAt: now, attempts: 1, updatedAt: now }).onConflictDoUpdate({
     target: jobExecutions.jobKey,
-    set: { status: 'running', lockedUntil, startedAt: now, attempts: 1, error: null, updatedAt: now },
+    set: { status: 'running', lockedUntil, startedAt: now, attempts: sql`${jobExecutions.attempts} + 1`, error: null, updatedAt: now },
     setWhere: sql`(${jobExecutions.status} <> 'running' OR ${jobExecutions.lockedUntil} IS NULL OR ${jobExecutions.lockedUntil} < ${now})`,
   }).returning()
 
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     await db.insert(dailySnapshots).values({ snapshotDate, payload: result.data, updatedAt: now }).onConflictDoUpdate({ target: dailySnapshots.snapshotDate, set: { payload: result.data, updatedAt: now } })
     await db.insert(editorialEditions).values({ editionKey: `market-${snapshotDate}`, editionDate: snapshotDate, payload: result.data, generatedAt: now, marketAsOf: new Date(result.data.asOf), status: 'valid', generationMode: result.data.watch?.some((item) => item.detail) ? 'mixed' : 'deterministic', updatedAt: now }).onConflictDoUpdate({ target: editorialEditions.editionKey, set: { payload: result.data, generatedAt: now, marketAsOf: new Date(result.data.asOf), status: 'valid', updatedAt: now } })
     await db.update(jobExecutions).set({ status: 'completed', finishedAt: new Date(), lockedUntil: null, updatedAt: new Date(), metadata: { sources: result.sources } }).where(eq(jobExecutions.jobKey, JOB_KEY))
+    revalidateTag('published-daily-data', 'max')
     return NextResponse.json({ status: 'published', generatedAt: now.toISOString(), sources: result.sources })
   } catch (error) {
     await db.update(jobExecutions).set({ status: 'failed', finishedAt: new Date(), lockedUntil: null, error: error instanceof Error ? error.message.slice(0, 500) : 'unknown_error', updatedAt: new Date() }).where(eq(jobExecutions.jobKey, JOB_KEY))

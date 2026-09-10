@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache'
 import type { DailyData } from '@/lib/daily-types'
 export type { DailyData } from '@/lib/daily-types'
 
@@ -13,7 +14,7 @@ export const mockDailyData: DailyData = {
   news: [{ title: 'Bitcoin recupera terreno tras la caída inicial del mercado', source: 'Cointelegraph', ago: '3h', url: '#' }, { title: 'Los flujos institucionales vuelven al centro de atención', source: 'CoinDesk', ago: '4h', url: '#' }],
 }
 
-export async function getDailyData(): Promise<DailyData | null> {
+const readPublishedData = unstable_cache(async (): Promise<DailyData | null> => {
   if (!process.env.DATABASE_URL) return null
 
   try {
@@ -27,6 +28,10 @@ export async function getDailyData(): Promise<DailyData | null> {
   } catch {
     return null
   }
+}, ['published-daily-data'], { revalidate: 300, tags: ['published-daily-data'] })
+
+export function getDailyData(): Promise<DailyData | null> {
+  return readPublishedData()
 }
 
 export const formatMoney = (value: number | null, compact = false) => value == null ? 'Sin datos' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: compact ? 'compact' : 'standard', maximumFractionDigits: compact ? 2 : 0 }).format(value)
