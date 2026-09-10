@@ -13,7 +13,7 @@ const JOB_KEY = 'daily-market-refresh'
 const LOCK_MINUTES = 10
 
 export async function POST(request: Request) {
-  const expected = process.env.DAILY_UPDATE_SECRET
+  const expected = process.env.CRON_SECRET ?? process.env.DAILY_UPDATE_SECRET
   if (!expected || request.headers.get('authorization') !== `Bearer ${expected}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -34,10 +34,16 @@ export async function POST(request: Request) {
       db.select().from(dailySnapshots).orderBy(desc(dailySnapshots.snapshotDate)).limit(30),
     ])
     const previous = historical.find((row) => (row.payload as Partial<DailyData>).market?.price != null)
-    const lastKnownGood = lastKnown.find((row) => { const payload = row.payload as Partial<DailyData>; return payload.market?.price != null && payload.market?.marketCap != null })
+    const lastKnownGood = lastKnown.find((row) => { const payload = row.payload as Partial<DailyData>; return payload.market?.price != null || payload.bias != null || (payload.market?.history?.marketCap?.length ?? 0) >= 2 || (payload.market?.history?.volume24h?.length ?? 0) >= 2 })
     const result = await collectLiveDaily((previous?.payload as DailyData | undefined) ?? null, (lastKnownGood?.payload as DailyData | undefined) ?? null)
     const snapshotDate = now.toISOString().slice(0, 10)
     await db.insert(dailySnapshots).values({ snapshotDate, payload: result.data, updatedAt: now }).onConflictDoUpdate({ target: dailySnapshots.snapshotDate, set: { payload: result.data, updatedAt: now } })
+    const quality = { market: result.data.market.price != null, bias: result.data.bias != null, watch: result.data.watch.length > 0, histories: (result.data.market.history?.marketCap?.length ?? 0) >= 2 || (result.data.market.history?.volume24h?.length ?? 0) >= 2 }
+    const isFullyValid = Object.values(quality).every(Boolean)
+    if (!isFullyValid) {
+      await db.update(jobExecutions).set({ status: 'partial', finishedAt: new Date(), lockedUntil: null, updatedAt: new Date(), metadata: { sources: result.sources, quality } }).where(eq(jobExecutions.jobKey, JOB_KEY))
+      return NextResponse.json({ status: 'partial', quality, preservedLastEdition: true }, { status: 503 })
+    }
     await db.insert(editorialEditions).values({ editionKey: `market-${snapshotDate}`, editionDate: snapshotDate, payload: result.data, generatedAt: now, marketAsOf: new Date(result.data.asOf), status: 'valid', generationMode: result.data.watch?.some((item) => item.detail) ? 'mixed' : 'deterministic', updatedAt: now }).onConflictDoUpdate({ target: editorialEditions.editionKey, set: { payload: result.data, generatedAt: now, marketAsOf: new Date(result.data.asOf), status: 'valid', updatedAt: now } })
     await db.update(jobExecutions).set({ status: 'completed', finishedAt: new Date(), lockedUntil: null, updatedAt: new Date(), metadata: { sources: result.sources } }).where(eq(jobExecutions.jobKey, JOB_KEY))
     revalidateTag('published-daily-data', 'max')
