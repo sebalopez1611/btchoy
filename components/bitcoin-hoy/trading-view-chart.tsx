@@ -31,6 +31,7 @@ const chartConfig = {
 export function TradingViewChart() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     const container = containerRef.current
@@ -64,10 +65,10 @@ export function TradingViewChart() {
       script.onerror = null
       container.replaceChildren()
     }
-  }, [])
+  }, [attempt])
 
   if (failed) {
-    return <div className="tradingview-chart-wrap chart-fallback" role="status"><strong>No pudimos cargar el gráfico de TradingView.</strong><span>El resto de la edición sigue disponible.</span></div>
+    return <div className="tradingview-chart-wrap chart-fallback" role="alert"><strong>No pudimos cargar el gráfico de TradingView.</strong><span>El resto de la edición sigue disponible.</span><button className="secondary-cta" onClick={() => { setFailed(false); setAttempt((value) => value + 1) }}>Reintentar gráfico</button></div>
   }
 
   return <div ref={containerRef} className="tradingview-chart-wrap" aria-label="Gráfico real de Bitcoin en TradingView" />
