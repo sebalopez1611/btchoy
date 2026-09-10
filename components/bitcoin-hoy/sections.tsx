@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUpRight, BarChart3, ChevronRight, Eye, ExternalLink, Landmark, Newspaper, Settings2, Sparkles, X } from 'lucide-react'
-import type { DailyData } from '@/lib/daily-types'
+import type { DailyData, HistoryPoint } from '@/lib/daily-types'
 import { AFFILIATE_CONFIG, formatMoney, formatPercent } from '@/lib/daily-types'
 import { TradingViewChart } from './trading-view-chart'
 import { MiniSparkline } from './mini-sparkline'
@@ -12,7 +12,7 @@ const tone = (direction: string) => direction === 'positive' ? 'text-positive' :
 const safeHref = (url: string | null | undefined) => url && url !== '#' ? url : undefined
 const fallback = (value: string | number | null | undefined, label = 'Sin datos') => value == null || value === '' ? label : value
 const formatAsOf = (value: string | null | undefined) => { if (!value) return 'Edición actual · Hora no disponible'; const date = new Date(value); if (Number.isNaN(date.getTime())) return 'Edición actual · Hora no disponible'; const dateLabel = new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(date); const timeLabel = new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(date); return `${dateLabel.charAt(0).toUpperCase()}${dateLabel.slice(1)} · Actualizado ${timeLabel} UTC` }
-const hasSparkline = (values: unknown): values is number[] => Array.isArray(values) && values.length >= 2 && values.every((value) => typeof value === 'number' && Number.isFinite(value))
+const hasSparkline = (values: unknown): values is HistoryPoint[] => Array.isArray(values) && values.length >= 2 && values.every((point) => point && typeof point === 'object' && Number.isFinite((point as HistoryPoint).value) && Number.isFinite(new Date((point as HistoryPoint).timestamp).getTime()))
 
 export function LoadingState({ label = 'Cargando lectura' }: { label?: string }) { return <div className="state-block loading-state" role="status"><span className="state-pulse" />{label}</div> }
 export function ErrorState({ label = 'No pudimos cargar esta lectura' }: { label?: string }) { return <div className="state-block error-state" role="alert"><span>!</span>{label}</div> }
@@ -25,7 +25,7 @@ export function DailyHero({ data }: { data: DailyData }) {
     <div className="eyebrow"><span className="brand-mark">₿</span><span>Bitcoin Hoy</span><span className="eyebrow-rule" /></div>
     <div className="hero-copy"><p className="kicker">Tu lectura diaria de Bitcoin</p><h1>La edición de<br /><em>hoy.</em></h1><p className="date-line">{formatAsOf(data.asOf)}</p></div>
     <div className="hero-market"><span className="price-label">BTC / USD</span><strong className="hero-price">{formatMoney(market.price)}</strong><div className="hero-change"><span className={cn('change-pill', market.change24h == null ? 'neutral-bg' : changeIsPositive ? 'positive-bg' : 'negative-bg')}>{formatPercent(market.change24h)}</span><span>en las últimas 24h</span></div></div>
-    <div className="hero-stats">{[['Market Cap', formatMoney(market.marketCap, true), market.history?.marketCap], ['Volumen 24h', formatMoney(market.volume24h, true), market.history?.volume24h], ['Dominancia', market.dominance == null ? 'Sin datos' : `${market.dominance.toFixed(2)}%`, market.history?.dominance], ['Fear & Greed', market.fearGreed == null ? 'Sin datos' : `${market.fearGreed} · ${market.fearGreedLabel || 'Sin etiqueta'}`, market.history?.fearGreed]].map(([label, value, history]) => <div className="hero-stat" key={label as string}><span>{label as string}</span><div className="stat-value-row"><b>{value as string}</b>{hasSparkline(history) && <MiniSparkline values={history} />}</div></div>)}</div>
+    <div className="hero-stats">{[['Market Cap', formatMoney(market.marketCap, true), market.history?.marketCap], ['Volumen 24h', formatMoney(market.volume24h, true), market.history?.volume24h], ['Dominancia', market.dominance == null ? 'Sin datos' : `${market.dominance.toFixed(2)}%`, market.history?.dominance], ['Fear & Greed', market.fearGreed == null ? 'Sin datos' : `${market.fearGreed} · ${market.fearGreedLabel || 'Sin etiqueta'}`, market.history?.fearGreed]].map(([label, value, history]) => <div className="hero-stat" key={label as string}><span>{label as string}</span><div className="stat-value-row"><b>{value as string}</b>{hasSparkline(history) && <MiniSparkline values={history} label={label === 'Volumen 24h' ? 'Volumen móvil de 24 horas' : label as string} />}</div>{label === 'Volumen 24h' && <small className="metric-help">Evolución del volumen móvil de 24 horas, no volumen por hora.</small>}{label === 'Dominancia' && !hasSparkline(history) && <small className="metric-help">Histórico en formación{market.dominance != null ? ' · 1 observación disponible' : ''}.</small>}{label === 'Fear & Greed' && hasSparkline(history) && <small className="metric-help">14 observaciones diarias ordenadas de más antiguas a recientes.</small>}</div>)}</div>
     <a href="#edicion" className="scroll-cue"><span>↓</span> La edición de hoy</a>
   </section>
 }
