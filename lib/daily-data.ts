@@ -22,9 +22,14 @@ const readPublishedData = unstable_cache(async (): Promise<DailyData | null> => 
     const { db } = await import('@/lib/db')
     const { dailySnapshots, editorialEditions } = await import('@/lib/db/schema')
     const [edition] = await db.select().from(editorialEditions).where(eq(editorialEditions.status, 'valid')).orderBy(desc(editorialEditions.generatedAt)).limit(1)
-    if (edition?.payload && typeof edition.payload === 'object') return edition.payload as DailyData
-    const [snapshot] = await db.select().from(dailySnapshots).orderBy(desc(dailySnapshots.snapshotDate)).limit(1)
-    return snapshot?.payload && typeof snapshot.payload === 'object' ? snapshot.payload as DailyData : null
+    const [snapshot, ...historySnapshots] = await db.select().from(dailySnapshots).orderBy(desc(dailySnapshots.snapshotDate)).limit(31)
+    const payload = edition?.payload && typeof edition.payload === 'object' ? edition.payload as DailyData : snapshot?.payload && typeof snapshot.payload === 'object' ? snapshot.payload as DailyData : null
+    if (!payload) return null
+    const historicalPayloads = [snapshot, ...historySnapshots].filter((row): row is NonNullable<typeof row> => Boolean(row?.payload && typeof row.payload === 'object'))
+    const asHistory = (key: 'marketCap' | 'volume24h' | 'dominance' | 'fearGreed') => historicalPayloads.map((row) => { const data = row.payload as DailyData; const value = key === 'fearGreed' ? data.market?.fearGreed : data.market?.[key]; return typeof value === 'number' && Number.isFinite(value) ? { value, timestamp: `${row.snapshotDate}T12:00:00.000Z` } : null }).filter((point): point is { value: number; timestamp: string } => point !== null).sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+    const existingHistory = payload.market?.history
+    const historyFor = (key: 'marketCap' | 'volume24h' | 'dominance' | 'fearGreed') => { const stored = existingHistory?.[key] ?? asHistory(key); if (stored.length >= 2) return stored; const current = key === 'fearGreed' ? payload.market?.fearGreed : payload.market?.[key]; if (typeof current !== 'number' || !Number.isFinite(current)) return stored; const currentPoint = { value: current, timestamp: payload.asOf }; return [...stored, currentPoint].sort((a, b) => a.timestamp.localeCompare(b.timestamp)) }
+    return { ...payload, market: { ...payload.market, history: { marketCap: historyFor('marketCap'), volume24h: historyFor('volume24h'), dominance: historyFor('dominance'), fearGreed: historyFor('fearGreed') } } }
   } catch {
     return null
   }
