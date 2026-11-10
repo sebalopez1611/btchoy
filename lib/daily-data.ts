@@ -1,4 +1,3 @@
-import { unstable_cache } from 'next/cache'
 import type { DailyData } from '@/lib/daily-types'
 export type { DailyData } from '@/lib/daily-types'
 
@@ -14,7 +13,7 @@ export const mockDailyData: DailyData = {
   news: [{ title: 'Bitcoin recupera terreno tras la caída inicial del mercado', source: 'Cointelegraph', ago: '3h', url: '#' }, { title: 'Los flujos institucionales vuelven al centro de atención', source: 'CoinDesk', ago: '4h', url: '#' }],
 }
 
-const readPublishedData = unstable_cache(async (): Promise<DailyData | null> => {
+async function readPublishedData(): Promise<DailyData | null> {
   if (!process.env.DATABASE_URL) return null
 
   try {
@@ -26,14 +25,14 @@ const readPublishedData = unstable_cache(async (): Promise<DailyData | null> => 
     const payload = edition?.payload && typeof edition.payload === 'object' ? edition.payload as DailyData : snapshot?.payload && typeof snapshot.payload === 'object' ? snapshot.payload as DailyData : null
     if (!payload) return null
     const historicalPayloads = [snapshot, ...historySnapshots].filter((row): row is NonNullable<typeof row> => Boolean(row?.payload && typeof row.payload === 'object'))
-    const asHistory = (key: 'marketCap' | 'volume24h' | 'dominance' | 'fearGreed') => historicalPayloads.map((row) => { const data = row.payload as DailyData; const value = key === 'fearGreed' ? data.market?.fearGreed : data.market?.[key]; return typeof value === 'number' && Number.isFinite(value) ? { value, timestamp: `${row.snapshotDate}T12:00:00.000Z` } : null }).filter((point): point is { value: number; timestamp: string } => point !== null).sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+    const asHistory = (key: 'price' | 'marketCap' | 'volume24h' | 'dominance' | 'fearGreed') => historicalPayloads.map((row) => { const data = row.payload as DailyData; const value = key === 'fearGreed' ? data.market?.fearGreed : data.market?.[key]; return typeof value === 'number' && Number.isFinite(value) ? { value, timestamp: new Date(row.updatedAt).toISOString() } : null }).filter((point): point is { value: number; timestamp: string } => point !== null).sort((a, b) => a.timestamp.localeCompare(b.timestamp))
     const existingHistory = payload.market?.history
-    const historyFor = (key: 'marketCap' | 'volume24h' | 'dominance' | 'fearGreed') => { const stored = existingHistory?.[key] ?? asHistory(key); if (stored.length >= 2) return stored; const current = key === 'fearGreed' ? payload.market?.fearGreed : payload.market?.[key]; if (typeof current !== 'number' || !Number.isFinite(current)) return stored; const currentPoint = { value: current, timestamp: payload.asOf }; return [...stored, currentPoint].sort((a, b) => a.timestamp.localeCompare(b.timestamp)) }
-    return { ...payload, market: { ...payload.market, history: { marketCap: historyFor('marketCap'), volume24h: historyFor('volume24h'), dominance: historyFor('dominance'), fearGreed: historyFor('fearGreed') } } }
+    const historyFor = (key: 'price' | 'marketCap' | 'volume24h' | 'dominance' | 'fearGreed') => { const stored = existingHistory?.[key] ?? asHistory(key); if (stored.length >= 2) return stored; const current = key === 'fearGreed' ? payload.market?.fearGreed : payload.market?.[key]; if (typeof current !== 'number' || !Number.isFinite(current)) return stored; const currentPoint = { value: current, timestamp: payload.asOf }; return [...stored, currentPoint].sort((a, b) => a.timestamp.localeCompare(b.timestamp)) }
+    return { ...payload, market: { ...payload.market, history: { price: historyFor('price'), marketCap: historyFor('marketCap'), volume24h: historyFor('volume24h'), dominance: historyFor('dominance'), fearGreed: historyFor('fearGreed') } } }
   } catch {
     return null
   }
-}, ['published-daily-data'], { revalidate: 300, tags: ['published-daily-data'] })
+}
 
 export function getDailyData(): Promise<DailyData | null> {
   return readPublishedData()

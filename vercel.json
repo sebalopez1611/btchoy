@@ -1,8 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/internal/daily-update",
-      "schedule": "0 0 * * *"
-    }
-  ]
-}
+{}

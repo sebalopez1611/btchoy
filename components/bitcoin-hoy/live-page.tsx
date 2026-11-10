@@ -10,5 +10,5 @@ export function LiveBitcoinPage({ initialData }: { initialData: DailyData | null
 
   if (!data) return <main><div className="site-shell"><div className="state-card" role={error ? 'alert' : 'status'}><p className="eyebrow">BITCOIN HOY</p><h1>No hay una edición publicada</h1><p>El próximo trabajo editorial publicará una nueva actualización.</p></div></div></main>
 
-  return <main><div className="site-shell"><DailyHero data={data} /><CatalystCard catalyst={data.catalyst} /><section className="market-grid"><BitcoinChart /><MarketBias bias={data.bias} /></section><DailyChanges changes={data.changes} /><WatchToday watch={data.watch} /><section className="data-grid"><ETFCard etf={data.etf} /><DerivativesCard derivatives={data.derivatives} /></section><SecondaryNews news={data.news} /><Footer /></div><AffiliateModal /></main>
+  return <main><div className="site-shell"><DailyHero data={data} /><CatalystCard catalyst={data.catalyst} /><section className="market-grid"><BitcoinChart priceHistory={data.market.history?.price} /><MarketBias bias={data.bias} /></section><DailyChanges changes={data.changes} /><WatchToday watch={data.watch} /><section className="data-grid"><ETFCard etf={data.etf} /><DerivativesCard derivatives={data.derivatives} /></section><SecondaryNews news={data.news} /><Footer /></div><AffiliateModal /></main>
 }
